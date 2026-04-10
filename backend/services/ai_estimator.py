@@ -1,41 +1,17 @@
 """
-AI-powered study time estimation using Google Gemini 2.0 Flash.
-Sends extracted PPT content to Gemini for intelligent analysis.
-Falls back gracefully to heuristic estimation if API is unavailable.
+AI-powered study time estimation using Gemini REST API directly.
+Uses httpx instead of the heavy google-generativeai SDK to stay under
+Vercel's 250MB serverless function limit.
 """
 
 import json
 import os
 import logging
+import httpx
 
 logger = logging.getLogger(__name__)
 
-# Lazy-loaded Gemini client
-_model = None
-
-
-def _get_model():
-    """Get or create the Gemini model. Returns None if no API key."""
-    global _model
-
-    if _model is not None:
-        return _model
-
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-
-    if not api_key:
-        logger.warning("GEMINI_API_KEY not set — AI estimation disabled, using heuristic fallback")
-        return None
-
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        _model = genai.GenerativeModel("gemini-2.0-flash")
-        logger.info("Gemini AI estimator initialized successfully")
-        return _model
-    except Exception as e:
-        logger.error(f"Failed to initialize Gemini client: {e}")
-        return None
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 
 class AIEstimateResult:
@@ -61,8 +37,9 @@ def ai_estimate(
     Ask Gemini to analyze the PPT content and estimate study time.
     Returns None if Gemini is unavailable.
     """
-    model = _get_model()
-    if not model:
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
+        logger.warning("GEMINI_API_KEY not set — AI estimation disabled")
         return None
 
     # Truncate text to avoid excessive token usage (keep ~4000 chars)
@@ -97,11 +74,20 @@ Return ONLY valid JSON (no markdown, no code fences) with this exact structure:
 }}"""
 
     try:
-        response = model.generate_content(prompt)
+        response = httpx.post(
+            f"{GEMINI_API_URL}?key={api_key}",
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+            },
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        data = response.json()
 
-        # Parse the JSON response
-        text = response.text.strip()
+        # Extract text from Gemini response
+        text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
         raw_response_text = text
+
         # Remove markdown code fences if present
         if text.startswith("```"):
             text = text.split("\n", 1)[1] if "\n" in text else text[3:]
@@ -110,21 +96,21 @@ Return ONLY valid JSON (no markdown, no code fences) with this exact structure:
             elif "```" in text:
                 text = text[:text.rfind("```")].strip()
 
-        data = json.loads(text)
+        parsed = json.loads(text)
 
         result = AIEstimateResult()
         result.raw_response = raw_response_text
         result.prompt = prompt
-        result.estimated_study_minutes = float(data.get("estimated_study_minutes", 0))
-        result.difficulty = data.get("difficulty", "medium")
-        result.key_topics = data.get("key_topics", [])[:8]  # Cap at 8 topics
-        result.study_tips = data.get("study_tips", [])[:4]   # Cap at 4 tips
-        result.reasoning = data.get("reasoning", "")[:500]    # Cap length
+        result.estimated_study_minutes = float(parsed.get("estimated_study_minutes", 0))
+        result.difficulty = parsed.get("difficulty", "medium")
+        result.key_topics = parsed.get("key_topics", [])[:8]
+        result.study_tips = parsed.get("study_tips", [])[:4]
+        result.reasoning = parsed.get("reasoning", "")[:500]
 
-        # Sanity check — ensure estimate is reasonable
+        # Sanity check
         if result.estimated_study_minutes < 1:
             result.estimated_study_minutes = max(slide_count * 2, 5)
-        if result.estimated_study_minutes > 1440:  # Cap at 24 hours
+        if result.estimated_study_minutes > 1440:
             result.estimated_study_minutes = 1440
 
         logger.info(
