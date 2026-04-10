@@ -6,8 +6,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
-DATABASE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-os.makedirs(DATABASE_DIR, exist_ok=True)
+# Detect if running on Vercel (serverless — read-only filesystem except /tmp)
+IS_VERCEL = os.getenv("VERCEL") == "1"
+
+if IS_VERCEL:
+    DATABASE_DIR = "/tmp"
+else:
+    DATABASE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+    os.makedirs(DATABASE_DIR, exist_ok=True)
 
 # Use Supabase URL from environment or fallback to local SQLite
 DATABASE_URL = os.getenv("DATABASE_URL")

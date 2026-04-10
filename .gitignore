@@ -1,10 +1,34 @@
+# Dependencies
 node_modules/
+__pycache__/
+*.pyc
+
+# Build outputs
 dist/
 build/
 frontend/node_modules/
 frontend/dist/
 frontend/build/
-frontend/guidelines/
-copilotrules/
+
+# Data
+data/uploads/
+data/*.db
+
+# Environment
 .env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Vercel
+.vercel/
+
+# Project specific
+frontend/guidelines/
 copilotrules/

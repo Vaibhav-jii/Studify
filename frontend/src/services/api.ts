@@ -1,6 +1,7 @@
 /**
  * API client for communicating with the Studify backend.
- * All requests go through the Vite proxy (/api → backend).
+ * - Local dev: Vite proxy forwards /api → http://127.0.0.1:8000
+ * - Production (Vercel): /api routes to the Python serverless function
  */
 
 const API_BASE = '/api';
