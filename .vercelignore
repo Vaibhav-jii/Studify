@@ -1,0 +1,11 @@
+# Exclude frontend source and assets from the Backend serverless function bundle
+frontend/
+data/
+backend/data/
+node_modules/
+frontend/node_modules/
+.git/
+# Ignore build outputs
+dist/
+build/
+frontend/build/
