@@ -11,15 +11,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Lazy-loaded Gemini client
-_client = None
+_model = None
 
 
-def _get_client():
-    """Get or create the Gemini client. Returns None if no API key."""
-    global _client
+def _get_model():
+    """Get or create the Gemini model. Returns None if no API key."""
+    global _model
 
-    if _client is not None:
-        return _client
+    if _model is not None:
+        return _model
 
     api_key = os.environ.get("GEMINI_API_KEY", "")
 
@@ -28,10 +28,11 @@ def _get_client():
         return None
 
     try:
-        from google import genai
-        _client = genai.Client(api_key=api_key)
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        _model = genai.GenerativeModel("gemini-2.0-flash")
         logger.info("Gemini AI estimator initialized successfully")
-        return _client
+        return _model
     except Exception as e:
         logger.error(f"Failed to initialize Gemini client: {e}")
         return None
@@ -60,8 +61,8 @@ def ai_estimate(
     Ask Gemini to analyze the PPT content and estimate study time.
     Returns None if Gemini is unavailable.
     """
-    client = _get_client()
-    if not client:
+    model = _get_model()
+    if not model:
         return None
 
     # Truncate text to avoid excessive token usage (keep ~4000 chars)
@@ -96,10 +97,7 @@ Return ONLY valid JSON (no markdown, no code fences) with this exact structure:
 }}"""
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-        )
+        response = model.generate_content(prompt)
 
         # Parse the JSON response
         text = response.text.strip()

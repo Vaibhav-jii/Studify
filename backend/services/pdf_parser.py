@@ -1,9 +1,8 @@
 """
-PDF parsing service using PyMuPDF (fitz).
+PDF parsing service using pypdf (lightweight, pure-Python).
 Extracts text content, image counts, and page-level details from .pdf files.
 """
 
-import fitz  # PyMuPDF
 import logging
 from typing import List
 
@@ -46,33 +45,37 @@ class PdfParseResult:
 def parse_pdf(file_path: str) -> PdfParseResult:
     """
     Parse a .pdf file and extract content details.
+    Uses pypdf (pure Python, lightweight) instead of PyMuPDF.
     """
+    from pypdf import PdfReader
+
     result = PdfParseResult()
 
     try:
-        doc = fitz.open(file_path)
+        reader = PdfReader(file_path)
     except Exception as e:
         logger.error(f"Failed to open PDF file: {e}")
         raise ValueError(f"Could not parse the PDF file: {e}")
 
-    for page_index, page in enumerate(doc, start=1):
+    for page_index, page in enumerate(reader.pages, start=1):
         page_info = PageInfo(page_number=page_index)
 
         # Extract text
-        text = page.get_text().strip()
+        text = (page.extract_text() or "").strip()
         page_info.text_content = text
         page_info.word_count = len(text.split()) if text else 0
         page_info.char_count = len(text)
         page_info.has_text = page_info.word_count > 0
 
         # Count images
-        images = page.get_images(full=True)
-        page_info.image_count = len(images)
+        try:
+            images = page.images
+            page_info.image_count = len(images)
+        except Exception:
+            page_info.image_count = 0
         page_info.has_images = page_info.image_count > 0
 
         result.slides.append(page_info)
-
-    doc.close()
 
     # Totals
     result.total_slides = len(result.slides)
